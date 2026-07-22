@@ -24,22 +24,35 @@ const feeds=[
 
 let sent=[];
 
+let posterRequests=0;
+
+
 
 if(fs.existsSync("sent.json")){
+
 try{
-sent=JSON.parse(
+
+sent =
+JSON.parse(
 fs.readFileSync("sent.json","utf8")
 );
+
 }catch{
+
 sent=[];
+
 }
+
 }
+
+
 
 
 
 function badNews(title){
 
 const bad=[
+
 "game",
 "controller",
 "figure",
@@ -49,17 +62,22 @@ const bad=[
 "review",
 "column",
 "opinion",
-"event",
 "concert",
-"live action"
+"live action",
+"movie review"
+
 ];
 
 
-return bad.some(x =>
-title.toLowerCase().includes(x)
+return bad.some(x=>
+title
+.toLowerCase()
+.includes(x)
 );
 
 }
+
+
 
 
 
@@ -73,22 +91,42 @@ return "";
 
 try{
 
-const r=await axios.get(
+
+const clean =
+text
+.replace(/<[^>]*>/g,"")
+.substring(0,4000);
+
+
+
+const r =
+await axios.get(
+
 "https://translate.googleapis.com/translate_a/single",
+
 {
+
 params:{
+
 client:"gtx",
+
 sl:"en",
+
 tl:"ru",
+
 dt:"t",
-q:text.substring(0,3000)
+
+q:clean
+
 }
+
 });
 
 
 return r.data[0]
 .map(x=>x[0])
 .join("");
+
 
 }catch{
 
@@ -104,50 +142,99 @@ return text;
 
 
 
+
+
+function cleanText(text){
+
+return text
+
+.replace(/<script[\s\S]*?<\/script>/gi,"")
+
+.replace(/<style[\s\S]*?<\/style>/gi,"")
+
+.replace(/<[^>]*>/g,"")
+
+.replace(/&nbsp;/g," ")
+
+.replace(/&amp;/g,"&")
+
+.replace(/&quot;/g,'"')
+
+.replace(/&#39;/g,"'")
+
+.replace(/\s+/g," ")
+
+.trim();
+
+}
+
+
+
+
+
+
+
+
+
 async function getArticleData(url,item){
 
 
 let image=null;
+
 let description="";
+
 
 
 try{
 
 
 if(item.media?.$.url){
+
 image=item.media.$.url;
+
 }
 
 
 
 if(item.contentEncoded){
 
-description=
-item.contentEncoded;
+description=item.contentEncoded;
+
 }
+
 
 
 
 const page =
 await axios.get(
+
 url,
+
 {
+
 headers:{
-"User-Agent":"Mozilla/5.0"
+
+"User-Agent":
+"Mozilla/5.0"
+
 },
-timeout:10000
+
+timeout:8000
+
 });
 
 
-const $=cheerio.load(
+const $ =
+cheerio.load(
 page.data
 );
 
 
 
+
 if(!image){
 
-image=
+image =
 $('meta[property="og:image"]')
 .attr("content");
 
@@ -157,7 +244,7 @@ $('meta[property="og:image"]')
 
 if(!image){
 
-image=
+image =
 $('meta[name="twitter:image"]')
 .attr("content");
 
@@ -165,20 +252,10 @@ $('meta[name="twitter:image"]')
 
 
 
-if(!image){
-
-image=
-$("article img")
-.first()
-.attr("src");
-
-}
-
-
 
 if(!description){
 
-description=
+description =
 $("article")
 .text();
 
@@ -186,10 +263,11 @@ $("article")
 
 
 
+
 }catch(e){
 
 console.log(
-"Страница ошибка",
+"Страница ошибка:",
 e.message
 );
 
@@ -197,12 +275,16 @@ e.message
 
 
 
-return {
+return{
+
 image,
+
 description
+
 };
 
 }
+
 
 
 
@@ -217,16 +299,45 @@ async function getAnimePoster(title){
 try{
 
 
-const r=
+let cleanTitle =
+
+title
+
+.replace(/Anime/gi,"")
+
+.replace(/Film/gi,"")
+
+.replace(/Trailer/gi,"")
+
+.replace(/Reveals/gi,"")
+
+.replace(/More Cast/gi,"")
+
+.trim();
+
+
+
+const r =
 await axios.get(
+
 "https://api.jikan.moe/v4/anime",
+
 {
+
 params:{
-q:title,
+
+q:cleanTitle,
+
 limit:1
+
 },
-timeout:10000
-});
+
+timeout:5000
+
+}
+
+);
+
 
 
 if(
@@ -234,24 +345,41 @@ r.data.data &&
 r.data.data.length
 ){
 
+
+console.log(
+"Постер:",
+r.data.data[0].title
+);
+
+
 return r.data.data[0]
-.images.jpg.large_image_url;
+.images
+.jpg
+.large_image_url;
+
 
 }
-
 
 
 }catch(e){
 
+
 console.log(
-"Постер ошибка"
+
+"Jikan ошибка:",
+
+e.response?.status || e.message
+
 );
 
+
 }
+
 
 
 return null;
 
+
 }
 
 
@@ -260,66 +388,56 @@ return null;
 
 
 
-async function sendDiscord(
-item,
-data
-){
 
 
-const title=
-await translate(item.title);
+async function sendDiscord(item,data){
+
+
+
+const title =
+await translate(
+item.title
+);
 
 
 
 let description =
+cleanText(
 data.description
-.replace(/<[^>]*>/g,"")
-.replace(/\s+/g," ")
-.trim();
+);
 
 
+
+if(!description){
 
 description=
+"Новая аниме-новость";
+
+}
+
+
+
+description =
 await translate(
-description.substring(0,1500)
+description.substring(0,4000)
 );
-
-
-
-let image = data.image;
-
-
-if(!globalThis.posterRequests){
-    globalThis.posterRequests = 0;
-}
-
-
-if(
-!image &&
-globalThis.posterRequests < 2
-){
-
-image =
-await getAnimePoster(
-    item.title
-);
-
-
-globalThis.posterRequests++;
-
-}
 
 
 
 await axios.post(
+
 WEBHOOK,
+
 {
+
 
 username:
 "Kibato News",
 
 
+
 embeds:[{
+
 
 title:
 "🌸 "+title,
@@ -328,35 +446,47 @@ title:
 url:item.link,
 
 
-description:
-description ||
-"Новость без описания",
+description,
 
 
 color:16733695,
 
 
-...(image?
+
+...(data.image ?
+
 {
+
 image:{
-url:image
+
+url:data.image
+
 }
+
 }
+
 :{}
+
 ),
 
 
+
 footer:{
+
 text:
 "Kibato News"
+
 },
+
 
 
 timestamp:
 new Date()
 
 
+
 }],
+
 
 
 components:[{
@@ -378,10 +508,11 @@ url:item.link
 }]
 
 
+
 });
 
-}
 
+}
 
 
 
@@ -397,37 +528,52 @@ async function main(){
 let count=0;
 
 
-
 for(const feed of feeds){
+
 
 
 let rss;
 
+
 try{
+
 
 rss =
 await parser.parseURL(feed);
 
+
+
 }catch(e){
 
+
 console.log(
-"RSS не загрузился:",
+"RSS ошибка:",
 e.message
 );
 
+
 continue;
+
 
 }
 
 
 
+
 for(
 const item of rss.items.slice(0,15)
+
 ){
+
+
+
+try{
+
 
 
 if(!item.link)
 continue;
+
 
 
 if(
@@ -444,29 +590,54 @@ continue;
 
 
 
-const data=
+
+let data =
 await getArticleData(
+
 item.link,
+
 item
+
 );
 
 
 
-try{
 
-await sendDiscord(
-item,
-data
+// только 2 попытки Jikan
+
+if(
+!data.image &&
+posterRequests < 2
+){
+
+
+const poster =
+await getAnimePoster(
+item.title
 );
 
-}catch(e){
 
-console.log(
-"Ошибка отправки:",
-e.response?.data || e.message
-);
+if(poster){
+
+data.image=poster;
 
 }
+
+
+posterRequests++;
+
+
+}
+
+
+
+await sendDiscord(
+
+item,
+
+data
+
+);
 
 
 
@@ -475,37 +646,76 @@ item.link
 );
 
 
+
 count++;
 
 
 
-await new Promise(
-r=>setTimeout(r,3000)
+console.log(
+
+"Отправлено:",
+
+item.title
+
 );
 
 
 
-}
+await new Promise(
+
+r=>setTimeout(r,2500)
+
+);
+
+
+
+}catch(e){
+
+
+console.log(
+
+"Ошибка новости:",
+
+e.message
+
+);
 
 
 }
 
+
+
+}
+
+
+
+}
 
 
 
 fs.writeFileSync(
+
 "sent.json",
+
 JSON.stringify(
+
 sent.slice(-300),
+
 null,
+
 2
+
 )
+
 );
 
 
+
 console.log(
-"Отправлено:",
+
+"Всего:",
 count
+
 );
 
 
