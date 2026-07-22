@@ -286,16 +286,26 @@ description.substring(0,1500)
 
 
 
-let image=data.image;
+let image = data.image;
 
 
+if(!globalThis.posterRequests){
+    globalThis.posterRequests = 0;
+}
 
-if(!image){
 
-image=
+if(
+!image &&
+globalThis.posterRequests < 2
+){
+
+image =
 await getAnimePoster(
-item.title
+    item.title
 );
+
+
+globalThis.posterRequests++;
 
 }
 
