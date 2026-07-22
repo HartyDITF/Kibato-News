@@ -22,7 +22,7 @@ item:[
 
 
 
-const feeds=[
+const feeds = [
 
 "https://animecorner.me/feed/"
 
@@ -30,7 +30,9 @@ const feeds=[
 
 
 
-let sent=[];
+let sent = [];
+
+let posterRequests = 0;
 
 
 
@@ -38,8 +40,7 @@ if(fs.existsSync("sent.json")){
 
 try{
 
-sent =
-JSON.parse(
+sent = JSON.parse(
 fs.readFileSync("sent.json","utf8")
 );
 
@@ -55,11 +56,12 @@ sent=[];
 
 
 
+// Фильтр мусора
 
-function badNews(title){
+function badNews(text){
 
 
-const bad=[
+const bad = [
 
 "game",
 "controller",
@@ -73,24 +75,89 @@ const bad=[
 "concert",
 "event",
 "marine day",
+
 "manga",
 "novel",
+"light novel",
+
 "live action",
+
 "episode",
-"episodes"
+"episodes",
+
+"birthday",
+"wedding",
+"marriage",
+"husband",
+"wife",
+"baby",
+"child",
+"birth",
+"born",
+"pregnant",
+"pregnancy",
+"family",
+"personal",
+"anniversary",
+"death",
+"funeral"
 
 ];
 
 
-return bad.some(x=>
+text=text.toLowerCase();
 
-title
-.toLowerCase()
-.includes(x)
 
+return bad.some(word =>
+text.includes(word)
 );
 
 }
+
+
+
+
+
+
+
+// Проверяем что это именно аниме-новость
+
+function isAnimeNews(text){
+
+
+const good=[
+
+"anime",
+"season",
+"film",
+"trailer",
+"visual",
+"cast",
+"staff",
+"premiere",
+"adaptation",
+"announced",
+"reveals",
+"release",
+"production",
+"studio",
+"voice actor",
+"voice actress"
+
+];
+
+
+text=text.toLowerCase();
+
+
+
+return good.some(word =>
+text.includes(word)
+);
+
+
+}
+
 
 
 
@@ -109,8 +176,15 @@ return "";
 try{
 
 
-const r =
-await axios.get(
+const clean =
+text
+.replace(/\s+/g," ")
+.trim()
+.substring(0,3000);
+
+
+
+const r = await axios.get(
 
 "https://translate.googleapis.com/translate_a/single",
 
@@ -122,7 +196,7 @@ client:"gtx",
 sl:"en",
 tl:"ru",
 dt:"t",
-q:text.substring(0,2000)
+q:clean
 
 }
 
@@ -139,6 +213,7 @@ return r.data[0]
 
 
 }catch{
+
 
 return text;
 
@@ -173,25 +248,25 @@ return text
 
 .replace(/facebook|twitter|pinterest|reddit|whatsapp/gi,"")
 
-.replace(/Источник:.*/gi,"")
+.replace(/Also Read[\s\S]*/gi,"")
 
-.replace(/Source:.*/gi,"")
+.replace(/Также прочитайте[\s\S]*/gi,"")
 
-.replace(/Автор:.*/gi,"")
+.replace(/Previous Post[\s\S]*/gi,"")
 
-.replace(/Written by.*/gi,"")
+.replace(/Next Post[\s\S]*/gi,"")
 
-.replace(/Also Read.*/gi,"")
+.replace(/Комментарии[\s\S]*/gi,"")
 
-.replace(/Также прочитайте.*/gi,"")
+.replace(/Loading[\s\S]*/gi,"")
 
-.replace(/Предыдущая запись.*/gi,"")
+.replace(/Источник:[\s\S]*/gi,"")
 
-.replace(/Следующая запись.*/gi,"")
+.replace(/Source:[\s\S]*/gi,"")
 
-.replace(/Комментарии.*/gi,"")
+.replace(/Written by[\s\S]*/gi,"")
 
-.replace(/Загрузка.*/gi,"")
+.replace(/Автор:[\s\S]*/gi,"")
 
 .replace(/&nbsp;/g," ")
 
@@ -211,39 +286,43 @@ return text
 
 
 
-function makeDescription(text){
+
+function makeShort(text){
 
 
-let result =
+let clean =
 cleanText(text);
 
 
 
-if(!result)
+if(!clean)
 return "";
 
 
 
-// берём только первые предложения
+// убираем слишком короткие куски
 
-let parts =
-result
-.split(". ")
-.filter(x=>x.length>30);
+let sentences =
+clean
+.split(".")
+.filter(x =>
+x.trim().length>40
+);
 
 
 
-result =
-parts
+let result =
+sentences
 .slice(0,5)
-.join(". ");
+.join(". ")
+.trim();
 
 
 
-if(result.length>900){
+if(result.length>1200){
 
 result =
-result.substring(0,900)
+result.substring(0,1200)
 +"...";
 
 }
@@ -256,12 +335,6 @@ return result;
 
 
 
-
-
-
-
-
-
 async function getData(item){
 
 
@@ -271,19 +344,16 @@ let description="";
 
 
 
+// Берём картинку из RSS
 
-// картинка RSS
-
-
-if(item.media?.$.url){
+if(item.media?.$?.url){
 
 image=item.media.$.url;
 
 }
 
 
-
-if(item.thumbnail?.$.url){
+if(!image && item.thumbnail?.$?.url){
 
 image=item.thumbnail.$.url;
 
@@ -292,11 +362,11 @@ image=item.thumbnail.$.url;
 
 
 
-// сначала берём короткое RSS описание
-
+// Берём описание из RSS
 
 description =
 item.contentSnippet ||
+item.contentEncoded ||
 "";
 
 
@@ -335,8 +405,9 @@ cheerio.load(page.data);
 
 
 
-if(!image){
+// OG картинка
 
+if(!image){
 
 image =
 $('meta[property="og:image"]')
@@ -346,8 +417,10 @@ $('meta[property="og:image"]')
 
 
 
-if(!image){
 
+// Twitter картинка
+
+if(!image){
 
 image =
 $('meta[name="twitter:image"]')
@@ -358,8 +431,9 @@ $('meta[name="twitter:image"]')
 
 
 
-if(!image){
+// Первая картинка статьи
 
+if(!image){
 
 image =
 $("article img")
@@ -372,22 +446,30 @@ $("article img")
 
 
 
-// если RSS плохой
 
-if(description.length<150){
+// Если RSS описание плохое
+
+if(
+!description ||
+description.length<200
+){
 
 
 description =
 
 $("article p")
-.slice(0,5)
 .map((i,e)=>
+
 $(e).text()
+
 )
 .get()
+.slice(0,6)
 .join(" ");
 
+
 }
+
 
 
 
@@ -395,7 +477,7 @@ $(e).text()
 
 
 console.log(
-"Страница ошибка:",
+"Ошибка страницы:",
 e.message
 );
 
@@ -405,12 +487,13 @@ e.message
 
 
 
-return{
+
+return {
 
 image,
 
 description:
-makeDescription(description)
+makeShort(description)
 
 };
 
@@ -425,7 +508,104 @@ makeDescription(description)
 
 
 
+
+// Получение постера через Jikan
+// максимум 2 раза за запуск
+
+
+async function getAnimePoster(title){
+
+
+try{
+
+
+let clean =
+title
+
+.replace(/anime/gi,"")
+
+.replace(/trailer/gi,"")
+
+.replace(/reveals/gi,"")
+
+.replace(/cast/gi,"")
+
+.replace(/more/gi,"")
+
+.trim();
+
+
+
+
+const r =
+await axios.get(
+
+"https://api.jikan.moe/v4/anime",
+
+{
+
+params:{
+
+q:clean,
+
+limit:1
+
+},
+
+timeout:5000
+
+}
+
+);
+
+
+
+
+if(
+r.data.data &&
+r.data.data.length
+){
+
+
+return r.data.data[0]
+.images
+.jpg
+.large_image_url;
+
+
+}
+
+
+}catch(e){
+
+
+console.log(
+
+"Jikan ошибка:",
+e.response?.status || e.message
+
+);
+
+
+}
+
+
+
+return null;
+
+
+}
+
+
+
+
+
+
+
+
+
 async function sendDiscord(item,data){
+
 
 
 const title =
@@ -443,16 +623,18 @@ data.description;
 if(!description){
 
 description =
-"Краткое описание отсутствует";
+"Описание отсутствует";
 
 }
 
 
 
+
 description =
 await translate(
-description.substring(0,900)
+description
 );
+
 
 
 
@@ -466,6 +648,7 @@ WEBHOOK,
 
 
 username:
+
 "Kibato News",
 
 
@@ -474,20 +657,31 @@ embeds:[{
 
 
 title:
+
 "🌸 "+title,
 
 
-url:item.link,
 
+url:
 
-description,
-
-
-color:16733695,
+item.link,
 
 
 
-...(data.image?
+description:
+
+
+description.substring(0,1800),
+
+
+
+color:
+
+16733695,
+
+
+
+...(data.image ?
 
 {
 
@@ -505,9 +699,11 @@ url:data.image
 
 
 
+
 footer:{
 
 text:
+
 "Kibato News"
 
 },
@@ -536,6 +732,10 @@ new Date()
 
 
 
+
+
+
+
 async function main(){
 
 
@@ -546,8 +746,8 @@ let count=0;
 for(const feed of feeds){
 
 
-
 let rss;
+
 
 
 try{
@@ -575,6 +775,8 @@ continue;
 
 
 
+
+
 for(
 const item of rss.items.slice(0,20)
 
@@ -590,26 +792,106 @@ continue;
 
 
 
-if(sent.includes(item.link))
+if(
+sent.includes(item.link)
+)
 continue;
 
 
 
-if(badNews(item.title))
+
+const checkText =
+
+item.title +
+
+" " +
+
+(item.contentSnippet || "") +
+
+" " +
+
+(item.contentEncoded || "");
+
+
+
+
+
+
+if(
+badNews(checkText)
+)
 continue;
 
 
 
 
-const data =
+
+if(
+!isAnimeNews(checkText)
+)
+continue;
+
+
+
+
+
+
+
+let data =
+
 await getData(item);
 
 
 
-await sendDiscord(
-item,
-data
+
+
+
+
+// максимум 2 обращения Jikan
+
+if(
+!data.image &&
+posterRequests < 2
+){
+
+
+
+const poster =
+
+await getAnimePoster(
+item.title
 );
+
+
+
+if(poster){
+
+data.image=poster;
+
+}
+
+
+posterRequests++;
+
+
+}
+
+
+
+
+
+
+
+await sendDiscord(
+
+item,
+
+data
+
+);
+
+
+
 
 
 
@@ -623,15 +905,80 @@ count++;
 
 
 
+
 console.log(
+
 "Отправлено:",
+
 item.title
+
 );
 
 
 
+
+
 await new Promise(
+
 r=>setTimeout(r,3000)
+
+);
+
+
+
+}catch(e){
+
+
+
+console.log(
+
+"Ошибка новости:",
+
+e.message
+
+);
+
+
+
+}
+
+
+
+}
+
+
+
+}
+
+
+
+
+
+
+
+try{
+
+
+fs.writeFileSync(
+
+"sent.json",
+
+JSON.stringify(
+
+sent.slice(-500),
+
+null,
+
+2
+
+)
+
+);
+
+
+
+console.log(
+"sent.json сохранён"
 );
 
 
@@ -640,7 +987,7 @@ r=>setTimeout(r,3000)
 
 
 console.log(
-"Ошибка новости:",
+"Ошибка sent.json:",
 e.message
 );
 
@@ -648,48 +995,38 @@ e.message
 }
 
 
-}
 
 
-
-}
-
-
-
-
-fs.writeFileSync(
-
-"sent.json",
-
-JSON.stringify(
-sent.slice(-500),
-null,
-2
-)
-
-);
 
 
 
 console.log(
+
 "Всего отправлено:",
+
 count
+
 );
 
 
-
 }
+
 
 
 
 
 
 main()
-.catch(e=>
+.catch(e=>{
+
 
 console.log(
+
 "Критическая ошибка:",
+
 e.message
-)
 
 );
+
+
+});
