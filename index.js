@@ -8,12 +8,14 @@ const WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 
 const parser = new Parser({
+
 customFields:{
 item:[
 ["content:encoded","contentEncoded"],
 ["media:content","media"]
 ]
 }
+
 });
 
 
@@ -49,6 +51,7 @@ sent=[];
 
 
 
+
 function badNews(title){
 
 const bad=[
@@ -70,12 +73,16 @@ const bad=[
 
 
 return bad.some(x=>
+
 title
 .toLowerCase()
 .includes(x)
+
 );
 
 }
+
+
 
 
 
@@ -94,7 +101,6 @@ try{
 
 const clean =
 text
-.replace(/<[^>]*>/g,"")
 .substring(0,4000);
 
 
@@ -130,7 +136,9 @@ return r.data[0]
 
 }catch{
 
+
 return text;
+
 
 }
 
@@ -146,13 +154,30 @@ return text;
 
 function cleanText(text){
 
+
+if(!text)
+return "";
+
+
+
 return text
+
 
 .replace(/<script[\s\S]*?<\/script>/gi,"")
 
 .replace(/<style[\s\S]*?<\/style>/gi,"")
 
 .replace(/<[^>]*>/g,"")
+
+.replace(/facebooktwitterpinterestlinkedintumblrredditwhatsapp/gi,"")
+
+.replace(/Предыдущая запись.*$/gi,"")
+
+.replace(/Следующая запись.*$/gi,"")
+
+.replace(/Загрузка.*$/gi,"")
+
+.replace(/Новости аниме/gi,"")
 
 .replace(/&nbsp;/g," ")
 
@@ -166,7 +191,10 @@ return text
 
 .trim();
 
+
 }
+
+
 
 
 
@@ -188,11 +216,12 @@ let description="";
 try{
 
 
-if(item.media?.$.url){
+if(item.media?.$?.url){
 
 image=item.media.$.url;
 
 }
+
 
 
 
@@ -224,6 +253,7 @@ timeout:8000
 });
 
 
+
 const $ =
 cheerio.load(
 page.data
@@ -253,14 +283,32 @@ $('meta[name="twitter:image"]')
 
 
 
-if(!description){
+if(!image){
 
-description =
-$("article")
-.text();
+image =
+$("article img")
+.first()
+.attr("src");
 
 }
 
+
+
+
+// Берём только абзацы статьи
+
+if(!description){
+
+description =
+
+$("article p")
+.map((i,el)=>
+$(el).text()
+)
+.get()
+.join(" ");
+
+}
 
 
 
@@ -275,6 +323,7 @@ e.message
 
 
 
+
 return{
 
 image,
@@ -283,7 +332,11 @@ description
 
 };
 
+
 }
+
+
+
 
 
 
@@ -299,7 +352,7 @@ async function getAnimePoster(title){
 try{
 
 
-let cleanTitle =
+let cleanTitle=
 
 title
 
@@ -317,7 +370,8 @@ title
 
 
 
-const r =
+const r=
+
 await axios.get(
 
 "https://api.jikan.moe/v4/anime",
@@ -347,8 +401,10 @@ r.data.data.length
 
 
 console.log(
-"Постер:",
+
+"Jikan:",
 r.data.data[0].title
+
 );
 
 
@@ -393,15 +449,16 @@ return null;
 async function sendDiscord(item,data){
 
 
+const title=
 
-const title =
 await translate(
 item.title
 );
 
 
 
-let description =
+let description=
+
 cleanText(
 data.description
 );
@@ -417,10 +474,13 @@ description=
 
 
 
-description =
+description=
+
 await translate(
-description.substring(0,4000)
+description.substring(0,3900)
 );
+
+
 
 
 
@@ -430,10 +490,8 @@ WEBHOOK,
 
 {
 
-
 username:
 "Kibato News",
-
 
 
 embeds:[{
@@ -453,14 +511,12 @@ color:16733695,
 
 
 
-...(data.image ?
+...(data.image?
 
 {
 
 image:{
-
 url:data.image
-
 }
 
 }
@@ -481,6 +537,7 @@ text:
 
 
 timestamp:
+
 new Date()
 
 
@@ -508,11 +565,13 @@ url:item.link
 }]
 
 
-
 });
 
 
 }
+
+
+
 
 
 
@@ -528,8 +587,8 @@ async function main(){
 let count=0;
 
 
-for(const feed of feeds){
 
+for(const feed of feeds){
 
 
 let rss;
@@ -540,7 +599,6 @@ try{
 
 rss =
 await parser.parseURL(feed);
-
 
 
 }catch(e){
@@ -560,11 +618,12 @@ continue;
 
 
 
+
+
 for(
 const item of rss.items.slice(0,15)
 
 ){
-
 
 
 try{
@@ -576,22 +635,20 @@ continue;
 
 
 
-if(
-sent.includes(item.link)
-)
+if(sent.includes(item.link))
 continue;
 
 
 
-if(
-badNews(item.title)
-)
+if(badNews(item.title))
 continue;
+
 
 
 
 
 let data =
+
 await getArticleData(
 
 item.link,
@@ -603,7 +660,7 @@ item
 
 
 
-// только 2 попытки Jikan
+
 
 if(
 !data.image &&
@@ -611,10 +668,13 @@ posterRequests < 2
 ){
 
 
-const poster =
+
+const poster=
+
 await getAnimePoster(
 item.title
 );
+
 
 
 if(poster){
@@ -624,10 +684,15 @@ data.image=poster;
 }
 
 
+
 posterRequests++;
 
 
 }
+
+
+
+
 
 
 
@@ -638,6 +703,7 @@ item,
 data
 
 );
+
 
 
 
@@ -654,10 +720,10 @@ count++;
 console.log(
 
 "Отправлено:",
-
 item.title
 
 );
+
 
 
 
@@ -693,6 +759,7 @@ e.message
 
 
 
+
 fs.writeFileSync(
 
 "sent.json",
@@ -713,13 +780,15 @@ null,
 
 console.log(
 
-"Всего:",
+"Всего отправлено:",
 count
 
 );
 
 
 }
+
+
 
 
 
