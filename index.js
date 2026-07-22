@@ -225,7 +225,7 @@ params:{
 q:title,
 limit:1
 },
-timeout:5000
+timeout:10000
 });
 
 
@@ -391,8 +391,23 @@ let count=0;
 for(const feed of feeds){
 
 
-const rss=
+let rss;
+
+try{
+
+rss =
 await parser.parseURL(feed);
+
+}catch(e){
+
+console.log(
+"RSS не загрузился:",
+e.message
+);
+
+continue;
+
+}
 
 
 
@@ -427,10 +442,21 @@ item
 
 
 
+try{
+
 await sendDiscord(
 item,
 data
 );
+
+}catch(e){
+
+console.log(
+"Ошибка отправки:",
+e.response?.data || e.message
+);
+
+}
 
 
 
