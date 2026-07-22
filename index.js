@@ -173,12 +173,16 @@ return translate(text);
 
 async function getImage(url,item){
 
-
 try{
 
 
 if(item.media?.$.url)
 return item.media.$.url;
+
+
+
+if(item.enclosure?.url)
+return item.enclosure.url;
 
 
 
@@ -188,7 +192,8 @@ url,
 {
 headers:{
 "User-Agent":"Mozilla/5.0"
-}
+},
+timeout:10000
 }
 );
 
@@ -206,13 +211,23 @@ $('meta[property="og:image"]')
 
 ||
 
+$('meta[name="twitter:image"]')
+.attr("content")
+
+||
+
 null
 
 );
 
 
 
-}catch{
+}catch(e){
+
+console.log(
+"Картинка не найдена:",
+url
+);
 
 return null;
 
@@ -220,7 +235,6 @@ return null;
 
 
 }
-
 
 
 
@@ -239,7 +253,12 @@ item.content ||
 );
 
 
-
+const cleanDescription =
+description
+.replace(/<[^>]*>/g,"")
+.replace(/&nbsp;/g," ")
+.replace(/&amp;/g,"&")
+.trim();
 await axios.post(
 WEBHOOK,
 {
@@ -260,7 +279,7 @@ url:item.link,
 
 
 description:
-description.substring(0,900),
+cleanDescription.substring(0,3500),
 
 
 color:16733695,
