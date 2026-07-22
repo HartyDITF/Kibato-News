@@ -449,33 +449,39 @@ return null;
 async function sendDiscord(item,data){
 
 
-const title=
-
+const title =
 await translate(
 item.title
 );
 
 
-
-let description=
-
+let description =
 cleanText(
 data.description
 );
 
 
 
+description =
+description
+.replace(/Новости аниме/gi,"")
+.replace(/Anime Corner/gi,"")
+.replace(/facebook/gi,"")
+.replace(/twitter/gi,"")
+.trim();
+
+
+
 if(!description){
 
-description=
+description =
 "Новая аниме-новость";
 
 }
 
 
 
-description=
-
+description =
 await translate(
 description.substring(0,3900)
 );
@@ -705,7 +711,12 @@ data
 );
 
 
+sent.push(item.link);
 
+fs.writeFileSync(
+"sent.json",
+JSON.stringify(sent.slice(-300),null,2)
+);
 
 sent.push(
 item.link
@@ -798,4 +809,11 @@ count
 
 
 
-main();
+main().catch(e=>{
+
+console.log(
+"Критическая ошибка:",
+e.message
+);
+
+});
