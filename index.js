@@ -34,6 +34,8 @@ let sent = [];
 
 let posterRequests = 0;
 
+let videoRequests = 0;
+
 
 
 if(fs.existsSync("sent.json")){
@@ -342,6 +344,8 @@ let image=null;
 
 let description="";
 
+let video=null;
+
 
 
 // Берём картинку из RSS
@@ -488,15 +492,34 @@ e.message
 
 
 
+const html = page?.data || "";
+
+const yt =
+html.match(
+/https?:\/\/(www\.)?youtube\.com\/watch\?v=[\w-]+/
+);
+
+
+if(yt){
+
+video=yt[0];
+
+}
+
+
+
+
+
 return {
 
 image,
 
 description:
-makeShort(description)
+makeShort(description),
+
+video
 
 };
-
 
 }
 
@@ -701,12 +724,33 @@ url:data.image
 
 
 footer:{
-
 text:
-
 "Kibato News"
-
 },
+
+
+...(data.video ?
+
+{
+
+fields:[
+
+{
+
+name:"🎬 Трейлер",
+
+value:
+`[Смотреть видео](${data.video})`
+
+}
+
+]
+
+}
+
+:{}
+
+),
 
 
 
