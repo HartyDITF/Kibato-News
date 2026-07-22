@@ -227,7 +227,9 @@ image=item.media.$.url;
 
 if(item.contentEncoded){
 
-description=item.contentEncoded;
+description =
+cleanText(item.contentEncoded)
+.substring(0,1200);
 
 }
 
