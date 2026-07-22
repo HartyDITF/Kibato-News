@@ -7,31 +7,25 @@ import fs from "fs";
 const WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 
-
 const parser = new Parser({
+
 customFields:{
 item:[
 ["content:encoded","contentEncoded"],
-["media:content","media"]
+["media:content","media"],
+["media:thumbnail","thumbnail"]
 ]
 }
+
 });
 
 
-
 const feeds=[
-
-"https://www.animenewsnetwork.com/all/rss.xml",
 "https://animecorner.me/feed/"
-
 ];
 
 
-
 let sent=[];
-
-let posterRequests=0;
-
 
 
 if(fs.existsSync("sent.json")){
@@ -53,6 +47,7 @@ sent=[];
 
 
 
+// мусорные новости
 
 function badNews(title){
 
@@ -68,18 +63,27 @@ const bad=[
 "column",
 "opinion",
 "concert",
+"event",
+"marine day",
+"facebook",
+"manga",
+"novel",
 "live action",
-"movie review"
+"episode",
+"episodes"
 
 ];
 
 
 return bad.some(x=>
-title.toLowerCase().includes(x)
+
+title
+.toLowerCase()
+.includes(x)
+
 );
 
 }
-
 
 
 
@@ -95,7 +99,8 @@ return "";
 try{
 
 
-const r=await axios.get(
+const r =
+await axios.get(
 
 "https://translate.googleapis.com/translate_a/single",
 
@@ -107,7 +112,7 @@ client:"gtx",
 sl:"en",
 tl:"ru",
 dt:"t",
-q:text.substring(0,2500)
+q:text.substring(0,3500)
 
 }
 
@@ -126,19 +131,14 @@ return text;
 
 }
 
+
 }
 
 
 
 
 
-
-
-
-function cleanText(text){
-
-if(!text)
-return "";
+function clean(text){
 
 
 return text
@@ -149,27 +149,13 @@ return text
 
 .replace(/<[^>]*>/g,"")
 
-.replace(/facebook|twitter|pinterest|reddit|whatsapp/gi,"")
+.replace(/facebooktwitterpinterestlinkedintumblrredditwhatsapp/gi,"")
 
 .replace(/Источник:.*$/gi,"")
 
-.replace(/Source:.*$/gi,"")
+.replace(/Предыдущая запись.*$/gi,"")
 
-.replace(/Автор:.*$/gi,"")
-
-.replace(/Also Read[\s\S]*$/gi,"")
-
-.replace(/Также прочитайте[\s\S]*$/gi,"")
-
-.replace(/Предыдущая запись[\s\S]*$/gi,"")
-
-.replace(/Следующая запись[\s\S]*$/gi,"")
-
-.replace(/Загрузка.*$/gi,"")
-
-.replace(/&nbsp;/g," ")
-
-.replace(/&amp;/g,"&")
+.replace(/Следующая запись.*$/gi,"")
 
 .replace(/\s+/g," ")
 
@@ -184,7 +170,7 @@ return text
 
 
 
-async function getArticleData(url,item){
+async function getData(item){
 
 
 let image=null;
@@ -193,34 +179,41 @@ let description="";
 
 
 
+// картинка из RSS
+
+if(item.media?.$?.url)
+image=item.media.$.url;
+
+
+if(item.thumbnail?.$?.url)
+image=item.thumbnail.$.url;
+
+
+
+// описание из RSS
+
+if(item.contentEncoded)
+description=item.contentEncoded;
+
+
+if(!description)
+description=item.contentSnippet;
+
+
+
 try{
 
 
+const page =
+await axios.get(
 
-if(item.media?.$.url){
-
-image=item.media.$.url;
-
-}
-
-
-
-if(item.contentEncoded){
-
-description=item.contentEncoded;
-
-}
-
-
-
-const page=await axios.get(
-
-url,
+item.link,
 
 {
 
 headers:{
-"User-Agent":"Mozilla/5.0"
+"User-Agent":
+"Mozilla/5.0"
 },
 
 timeout:8000
@@ -228,14 +221,17 @@ timeout:8000
 });
 
 
-const $=cheerio.load(page.data);
+const $=
+cheerio.load(page.data);
 
 
 
+// запасные картинки
 
 if(!image){
 
-image=$('meta[property="og:image"]')
+image=
+$('meta[property="og:image"]')
 .attr("content");
 
 }
@@ -244,47 +240,29 @@ image=$('meta[property="og:image"]')
 
 if(!image){
 
-image=$('meta[name="twitter:image"]')
+image=
+$('meta[name="twitter:image"]')
 .attr("content");
 
 }
 
 
 
+// нормальное описание
 
-if(!image){
-
-image=$("article img")
-.first()
-.attr("src");
-
-}
-
-
-
-
-// Берём только первые абзацы
-
-if(description){
+if(
+!description ||
+description.length<200
+){
 
 description=
-$("p")
-.slice(0,4)
-.map((i,e)=>$(e).text())
-.get()
-.join(" ");
 
-}
-
-
-
-if(!description){
-
-description=
 $("article p")
-.slice(0,4)
-.map((i,e)=>$(e).text())
+.map((i,e)=>
+$(e).text()
+)
 .get()
+.slice(0,5)
 .join(" ");
 
 }
@@ -294,7 +272,7 @@ $("article p")
 }catch(e){
 
 console.log(
-"Ошибка страницы:",
+"Страница:",
 e.message
 );
 
@@ -305,7 +283,8 @@ e.message
 return{
 
 image,
-description
+
+description:clean(description)
 
 };
 
@@ -320,136 +299,33 @@ description
 
 
 
-async function getAnimePoster(title){
+async function send(item,data){
 
 
-try{
-
-
-const clean=title
-
-.replace(/anime/gi,"")
-
-.replace(/trailer/gi,"")
-
-.replace(/reveals/gi,"")
-
-.replace(/more cast/gi,"")
-
-.trim();
+let title=
+await translate(item.title);
 
 
 
-const r=await axios.get(
-
-"https://api.jikan.moe/v4/anime",
-
-{
-
-params:{
-q:clean,
-limit:1
-},
-
-timeout:5000
-
-}
-
-);
+let description=data.description;
 
 
 
-if(r.data.data?.length){
-
-return r.data.data[0]
-.images
-.jpg
-.large_image_url;
-
-}
-
-
-
-}catch(e){
-
-console.log(
-"Jikan:",
-e.response?.status || e.message
-);
-
-}
-
-
-
-return null;
-
-}
-
-
-
-
-
-
-
-
-
-async function sendDiscord(item,data){
-
-
-const title=
-await translate(
-item.title
-);
-
-
-
-let description=
-cleanText(
-data.description
-);
-
-
-
-if(!description){
+if(
+!description ||
+description.length<100
+){
 
 description=
-"Новое событие из мира аниме";
+"Краткое описание отсутствует";
 
 }
-
 
 
 description=
 await translate(
-description.substring(0,2000)
+description.substring(0,1800)
 );
-
-
-
-
-
-if(!data.image && posterRequests < 2){
-
-
-const poster=
-await getAnimePoster(
-item.title
-);
-
-
-if(poster){
-
-data.image=poster;
-
-}
-
-
-posterRequests++;
-
-}
-
-
-
 
 
 
@@ -460,13 +336,12 @@ WEBHOOK,
 
 {
 
-
 username:
 "Kibato News",
 
 
-
 embeds:[{
+
 
 title:
 "🌸 "+title,
@@ -481,35 +356,30 @@ description,
 color:16733695,
 
 
-...(data.image?
-
+image:data.image?
 {
-
-image:{
 url:data.image
 }
-
-}
-
-:{}
-
-
-
-),
+:
+undefined,
 
 
 footer:{
-text:"Kibato News"
+text:
+"Kibato News"
 },
 
 
-timestamp:new Date()
+timestamp:
+new Date()
 
 
 }]
 
+}
 
-});
+);
+
 
 
 }
@@ -528,51 +398,16 @@ async function main(){
 let count=0;
 
 
-
-for(const feed of feeds){
-
-
-
-let rss;
-
-
-try{
-
-
-rss=
-await parser.parseURL(feed);
-
-
-
-console.log(
-"RSS:",
-feed,
-rss.items.length
+const rss=
+await parser.parseURL(
+feeds[0]
 );
 
 
 
-}catch(e){
-
-console.log(
-"RSS ошибка:",
-e.message
-);
-
-continue;
-
-}
-
-
-
-
-
-
-
-for(const item of rss.items.slice(0,30)){
-
-
-try{
+for(
+const item of rss.items.slice(0,15)
+){
 
 
 
@@ -581,43 +416,22 @@ continue;
 
 
 
-if(sent.includes(item.link)){
-
-console.log(
-"Уже было:",
-item.title
-);
-
+if(sent.includes(item.link))
 continue;
 
-}
 
 
-
-if(badNews(item.title)){
-
-console.log(
-"Фильтр:",
-item.title
-);
-
+if(badNews(item.title))
 continue;
-
-}
-
 
 
 
 const data=
-await getArticleData(
-item.link,
-item
-);
+await getData(item);
 
 
 
-
-await sendDiscord(
+await send(
 item,
 data
 );
@@ -647,21 +461,8 @@ r=>setTimeout(r,3000)
 
 
 
-}catch(e){
-
-console.log(
-"Ошибка новости:",
-e.message
-);
-
 }
 
-
-
-}
-
-
-}
 
 
 
@@ -670,7 +471,7 @@ fs.writeFileSync(
 "sent.json",
 
 JSON.stringify(
-sent.slice(-500),
+sent.slice(-300),
 null,
 2
 )
@@ -680,15 +481,22 @@ null,
 
 
 console.log(
-"Всего отправлено:",
+"Всего:",
 count
 );
+
 
 
 }
 
 
 
+main()
+.catch(e=>
 
+console.log(
+"Ошибка:",
+e.message
+)
 
-main();
+);
