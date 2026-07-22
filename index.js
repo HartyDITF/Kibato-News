@@ -760,21 +760,27 @@ e.message
 
 
 
+try{
+
 fs.writeFileSync(
-
 "sent.json",
-
 JSON.stringify(
-
 sent.slice(-300),
-
 null,
-
 2
-
 )
-
 );
+
+console.log("sent.json сохранён");
+
+}catch(e){
+
+console.log(
+"Ошибка сохранения sent.json:",
+e.message
+);
+
+}
 
 
 
