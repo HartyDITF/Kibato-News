@@ -7,21 +7,25 @@ import fs from "fs";
 const WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 
-const parser = new Parser({
 
+const parser = new Parser({
 customFields:{
 item:[
 ["content:encoded","contentEncoded"],
 ["media:content","media"]
 ]
 }
-
 });
 
 
+
 const feeds=[
+
+"https://www.animenewsnetwork.com/all/rss.xml",
 "https://animecorner.me/feed/"
+
 ];
+
 
 
 let sent=[];
@@ -34,8 +38,7 @@ if(fs.existsSync("sent.json")){
 
 try{
 
-sent =
-JSON.parse(
+sent=JSON.parse(
 fs.readFileSync("sent.json","utf8")
 );
 
@@ -46,7 +49,6 @@ sent=[];
 }
 
 }
-
 
 
 
@@ -73,16 +75,10 @@ const bad=[
 
 
 return bad.some(x=>
-
-title
-.toLowerCase()
-.includes(x)
-
+title.toLowerCase().includes(x)
 );
 
 }
-
-
 
 
 
@@ -99,14 +95,7 @@ return "";
 try{
 
 
-const clean =
-text
-.substring(0,4000);
-
-
-
-const r =
-await axios.get(
+const r=await axios.get(
 
 "https://translate.googleapis.com/translate_a/single",
 
@@ -115,14 +104,10 @@ await axios.get(
 params:{
 
 client:"gtx",
-
 sl:"en",
-
 tl:"ru",
-
 dt:"t",
-
-q:clean
+q:text.substring(0,2500)
 
 }
 
@@ -134,16 +119,14 @@ return r.data[0]
 .join("");
 
 
-}catch{
 
+}catch{
 
 return text;
 
-
 }
 
 }
-
 
 
 
@@ -161,25 +144,35 @@ return "";
 return text
 
 .replace(/<script[\s\S]*?<\/script>/gi,"")
+
 .replace(/<style[\s\S]*?<\/style>/gi,"")
+
 .replace(/<[^>]*>/g,"")
 
-.replace(/ТАКЖЕ ПРОЧИТАЙТЕ[\s\S]*/gi,"")
-.replace(/Источник:[\s\S]*/gi,"")
-.replace(/©[\s\S]*/gi,"")
-.replace(/Автор:[\s\S]*/gi,"")
+.replace(/facebook|twitter|pinterest|reddit|whatsapp/gi,"")
 
-.replace(/facebooktwitterpinterestlinkedintumblrredditwhatsapp/gi,"")
+.replace(/Источник:.*$/gi,"")
 
-.replace(/Предыдущая запись.*$/gi,"")
-.replace(/Следующая запись.*$/gi,"")
+.replace(/Source:.*$/gi,"")
+
+.replace(/Автор:.*$/gi,"")
+
+.replace(/Also Read[\s\S]*$/gi,"")
+
+.replace(/Также прочитайте[\s\S]*$/gi,"")
+
+.replace(/Предыдущая запись[\s\S]*$/gi,"")
+
+.replace(/Следующая запись[\s\S]*$/gi,"")
+
+.replace(/Загрузка.*$/gi,"")
 
 .replace(/&nbsp;/g," ")
+
 .replace(/&amp;/g,"&")
-.replace(/&quot;/g,'"')
-.replace(/&#39;/g,"'")
 
 .replace(/\s+/g," ")
+
 .trim();
 
 }
@@ -191,100 +184,108 @@ return text
 
 
 
-
-
 async function getArticleData(url,item){
 
+
 let image=null;
+
 let description="";
+
 
 
 try{
 
 
-if(item.media?.$?.url){
+
+if(item.media?.$.url){
+
 image=item.media.$.url;
+
 }
 
 
 
-const page =
-await axios.get(
+if(item.contentEncoded){
+
+description=item.contentEncoded;
+
+}
+
+
+
+const page=await axios.get(
+
 url,
+
 {
+
 headers:{
-"User-Agent":
-"Mozilla/5.0"
+"User-Agent":"Mozilla/5.0"
 },
+
 timeout:8000
-}
-);
-
-
-
-const $ =
-cheerio.load(page.data);
-
-
-
-// картинка
-
-if(!image){
-
-image =
-$('meta[property="og:image"]')
-.attr("content");
-
-}
-
-
-if(!image){
-
-image =
-$('meta[name="twitter:image"]')
-.attr("content");
-
-}
-
-
-
-// берём только текст статьи
-
-let paragraphs=[];
-
-
-$("article p").each((i,el)=>{
-
-let text=$(el).text().trim();
-
-
-if(
-text.length > 40 &&
-paragraphs.length < 6
-){
-
-paragraphs.push(text);
-
-}
-
 
 });
 
 
-
-description =
-paragraphs.join(" ");
+const $=cheerio.load(page.data);
 
 
 
-// если не нашли
+
+if(!image){
+
+image=$('meta[property="og:image"]')
+.attr("content");
+
+}
+
+
+
+if(!image){
+
+image=$('meta[name="twitter:image"]')
+.attr("content");
+
+}
+
+
+
+
+if(!image){
+
+image=$("article img")
+.first()
+.attr("src");
+
+}
+
+
+
+
+// Берём только первые абзацы
+
+if(description){
+
+description=
+$("p")
+.slice(0,4)
+.map((i,e)=>$(e).text())
+.get()
+.join(" ");
+
+}
+
+
 
 if(!description){
 
-description =
-cleanText(
-item.contentEncoded || ""
-);
+description=
+$("article p")
+.slice(0,4)
+.map((i,e)=>$(e).text())
+.get()
+.join(" ");
 
 }
 
@@ -293,7 +294,7 @@ item.contentEncoded || ""
 }catch(e){
 
 console.log(
-"Страница ошибка:",
+"Ошибка страницы:",
 e.message
 );
 
@@ -304,17 +305,12 @@ e.message
 return{
 
 image,
-
-description:
-description.substring(0,1800)
+description
 
 };
 
 
 }
-
-
-
 
 
 
@@ -330,38 +326,29 @@ async function getAnimePoster(title){
 try{
 
 
-let cleanTitle=
+const clean=title
 
-title
+.replace(/anime/gi,"")
 
-.replace(/Anime/gi,"")
+.replace(/trailer/gi,"")
 
-.replace(/Film/gi,"")
+.replace(/reveals/gi,"")
 
-.replace(/Trailer/gi,"")
-
-.replace(/Reveals/gi,"")
-
-.replace(/More Cast/gi,"")
+.replace(/more cast/gi,"")
 
 .trim();
 
 
 
-const r=
-
-await axios.get(
+const r=await axios.get(
 
 "https://api.jikan.moe/v4/anime",
 
 {
 
 params:{
-
-q:cleanTitle,
-
+q:clean,
 limit:1
-
 },
 
 timeout:5000
@@ -372,47 +359,29 @@ timeout:5000
 
 
 
-if(
-r.data.data &&
-r.data.data.length
-){
-
-
-console.log(
-
-"Jikan:",
-r.data.data[0].title
-
-);
-
+if(r.data.data?.length){
 
 return r.data.data[0]
 .images
 .jpg
 .large_image_url;
 
-
 }
+
 
 
 }catch(e){
 
-
 console.log(
-
-"Jikan ошибка:",
-
+"Jikan:",
 e.response?.status || e.message
-
 );
-
 
 }
 
 
 
 return null;
-
 
 }
 
@@ -427,42 +396,59 @@ return null;
 async function sendDiscord(item,data){
 
 
-const title =
+const title=
 await translate(
 item.title
 );
 
 
-let description =
+
+let description=
 cleanText(
 data.description
 );
 
 
 
-description =
-description
-.replace(/Новости аниме/gi,"")
-.replace(/Anime Corner/gi,"")
-.replace(/facebook/gi,"")
-.replace(/twitter/gi,"")
-.trim();
-
-
-
 if(!description){
 
-description =
-"Новая аниме-новость";
+description=
+"Новое событие из мира аниме";
 
 }
 
 
 
-description =
+description=
 await translate(
-description.substring(0,1800)
+description.substring(0,2000)
 );
+
+
+
+
+
+if(!data.image && posterRequests < 2){
+
+
+const poster=
+await getAnimePoster(
+item.title
+);
+
+
+if(poster){
+
+data.image=poster;
+
+}
+
+
+posterRequests++;
+
+}
+
+
 
 
 
@@ -474,12 +460,13 @@ WEBHOOK,
 
 {
 
+
 username:
 "Kibato News",
 
 
-embeds:[{
 
+embeds:[{
 
 title:
 "🌸 "+title,
@@ -494,7 +481,6 @@ description,
 color:16733695,
 
 
-
 ...(data.image?
 
 {
@@ -507,44 +493,18 @@ url:data.image
 
 :{}
 
+
+
 ),
 
 
-
 footer:{
-
-text:
-"Kibato News"
-
+text:"Kibato News"
 },
 
 
+timestamp:new Date()
 
-timestamp:
-
-new Date()
-
-
-
-}],
-
-
-
-components:[{
-
-type:1,
-
-components:[{
-
-type:2,
-
-style:5,
-
-label:"📖 Читать",
-
-url:item.link
-
-}]
 
 }]
 
@@ -553,9 +513,6 @@ url:item.link
 
 
 }
-
-
-
 
 
 
@@ -575,27 +532,34 @@ let count=0;
 for(const feed of feeds){
 
 
+
 let rss;
 
 
 try{
 
 
-rss =
+rss=
 await parser.parseURL(feed);
 
 
-}catch(e){
 
+console.log(
+"RSS:",
+feed,
+rss.items.length
+);
+
+
+
+}catch(e){
 
 console.log(
 "RSS ошибка:",
 e.message
 );
 
-
 continue;
-
 
 }
 
@@ -604,10 +568,8 @@ continue;
 
 
 
-for(
-const item of rss.items.slice(0,15)
 
-){
+for(const item of rss.items.slice(0,30)){
 
 
 try{
@@ -619,82 +581,48 @@ continue;
 
 
 
-if(sent.includes(item.link))
-continue;
+if(sent.includes(item.link)){
 
-
-
-if(badNews(item.title))
-continue;
-
-
-
-
-
-let data =
-
-await getArticleData(
-
-item.link,
-
-item
-
-);
-
-
-
-
-
-
-if(
-!data.image &&
-posterRequests < 2
-){
-
-
-
-const poster=
-
-await getAnimePoster(
+console.log(
+"Уже было:",
 item.title
 );
 
-
-
-if(poster){
-
-data.image=poster;
+continue;
 
 }
 
 
 
-posterRequests++;
+if(badNews(item.title)){
 
+console.log(
+"Фильтр:",
+item.title
+);
+
+continue;
 
 }
 
 
 
+
+const data=
+await getArticleData(
+item.link,
+item
+);
 
 
 
 
 await sendDiscord(
-
 item,
-
 data
-
 );
 
 
-sent.push(item.link);
-
-fs.writeFileSync(
-"sent.json",
-JSON.stringify(sent.slice(-300),null,2)
-);
 
 sent.push(
 item.link
@@ -707,35 +635,25 @@ count++;
 
 
 console.log(
-
 "Отправлено:",
 item.title
-
 );
-
 
 
 
 await new Promise(
-
-r=>setTimeout(r,2500)
-
+r=>setTimeout(r,3000)
 );
 
 
 
 }catch(e){
 
-
 console.log(
-
 "Ошибка новости:",
-
 e.message
-
 );
 
-
 }
 
 
@@ -743,41 +661,27 @@ e.message
 }
 
 
-
 }
 
 
-
-
-try{
 
 fs.writeFileSync(
+
 "sent.json",
+
 JSON.stringify(
-sent.slice(-300),
+sent.slice(-500),
 null,
 2
 )
+
 );
-
-console.log("sent.json сохранён");
-
-}catch(e){
-
-console.log(
-"Ошибка сохранения sent.json:",
-e.message
-);
-
-}
 
 
 
 console.log(
-
 "Всего отправлено:",
 count
-
 );
 
 
@@ -787,11 +691,4 @@ count
 
 
 
-main().catch(e=>{
-
-console.log(
-"Критическая ошибка:",
-e.message
-);
-
-});
+main();
