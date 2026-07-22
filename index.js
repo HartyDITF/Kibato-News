@@ -84,8 +84,6 @@ const bad = [
 
 "live action",
 
-"episode",
-"episodes",
 
 "birthday",
 "wedding",
@@ -339,13 +337,10 @@ return result;
 
 async function getData(item){
 
-
 let image=null;
-
 let description="";
-
 let video=null;
-
+let html="";
 
 
 // Берём картинку из RSS
@@ -382,6 +377,17 @@ try{
 
 const page =
 await axios.get(
+item.link,
+{
+headers:{
+"User-Agent":
+"Mozilla/5.0"
+},
+timeout:8000
+}
+);
+
+html = page.data;
 
 item.link,
 
@@ -492,11 +498,9 @@ e.message
 
 
 
-const html = page?.data || "";
-
 const yt =
 html.match(
-/https?:\/\/(www\.)?youtube\.com\/watch\?v=[\w-]+/
+/https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/[^\s"'<>]+/
 );
 
 
@@ -1009,7 +1013,7 @@ fs.writeFileSync(
 
 JSON.stringify(
 
-sent.slice(-500),
+sent.slice(-1000),
 
 null,
 
