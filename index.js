@@ -51,8 +51,6 @@ const bad=[
 "opinion",
 "event",
 "concert",
-"manga",
-"novel",
 "live action"
 ];
 
