@@ -7,17 +7,36 @@ import fs from "fs";
 const WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 
-const parser = new Parser();
+const parser = new Parser({
+
+customFields:{
+
+item:[
+
+"content:encoded",
+
+"media:content",
+
+"media:thumbnail"
+
+]
+
+}
+
+});
 
 
-const feeds = [
+
+const feeds=[
 
 "https://animecorner.me/feed/"
 
 ];
 
 
+
 let sent=[];
+
 
 
 if(fs.existsSync("sent.json")){
@@ -39,115 +58,205 @@ sent=[];
 
 
 
+
 function isBad(title){
+
 
 const bad=[
 
 "game",
 "controller",
 "figure",
+"merchandise",
 "merch",
-"interview",
-"review",
-"column",
-"opinion",
 "podcast",
-"manga",
-"novel",
+"opinion",
+"column",
 "live action",
-"event",
 "concert"
 
 ];
 
 
 return bad.some(
-x =>
+
+x=>
+
 title
 .toLowerCase()
 .includes(x)
+
 );
 
 }
+
 
 
 
 
 async function translate(text){
 
+
+if(!text)
+return "Новая аниме-новость";
+
+
+
 try{
 
+
 const clean =
+
 text
+
+.replace(/<script[\s\S]*?<\/script>/gi,"")
+
+.replace(/<style[\s\S]*?<\/style>/gi,"")
+
 .replace(/<[^>]*>/g,"")
-.substring(0,2000);
+
+.replace(/&nbsp;/g," ")
+
+.replace(/&amp;/g,"&")
+
+.trim();
 
 
 
-const r =
+const result =
+
 await axios.get(
+
 "https://translate.googleapis.com/translate_a/single",
+
 {
 
 params:{
 
 client:"gtx",
+
 sl:"en",
+
 tl:"ru",
+
 dt:"t",
-q:clean
+
+q:
+clean.substring(0,4500)
 
 }
 
-});
+}
+
+);
 
 
 
-return r.data[0]
+return result.data[0]
+
 .map(
+
 x=>x[0]
+
 )
-.join("");
+
+.join("")
+
+.trim();
 
 
 
-}catch{
+}catch(e){
+
+
+console.log(
+"Перевод ошибка"
+);
+
 
 return text;
 
-}
 
 }
 
 
+}
 
 
 
-async function getImage(url){
+
+
+async function getImage(item){
 
 
 try{
 
 
+// RSS картинка
+
+if(
+item["media:content"]?.url
+){
+
+return item["media:content"].url;
+
+}
+
+
+
+if(
+item["media:thumbnail"]?.url
+){
+
+return item["media:thumbnail"].url;
+
+}
+
+
+
+
+if(
+item.enclosure?.url
+){
+
+return item.enclosure.url;
+
+}
+
+
+
+
+// запасной вариант через страницу
+
+
 const page =
+
 await axios.get(
-url,
+
+item.link,
+
 {
 
 headers:{
+
 "User-Agent":
+
 "Mozilla/5.0"
+
 },
 
 timeout:10000
 
-});
+}
 
-
-const $ =
-cheerio.load(
-page.data
 );
+
+
+
+const $
+
+=
+cheerio.load(page.data);
 
 
 
@@ -169,13 +278,22 @@ null
 
 
 
-}catch{
+}catch(e){
+
+
+console.log(
+"Нет картинки"
+);
+
 
 return null;
 
-}
 
 }
+
+
+}
+
 
 
 
@@ -186,74 +304,126 @@ image
 ){
 
 
+
 const title =
+
 await translate(
 item.title
 );
 
 
 
+
+
+const rawDescription =
+
+
+item["content:encoded"]
+
+||
+
+item.content
+
+||
+
+item.contentSnippet
+
+||
+
+item.summary
+
+||
+
+"Новая аниме-новость";
+
+
+
+
 const description =
+
 await translate(
-item.contentSnippet ||
-item.content ||
-"Новая аниме-новость"
+rawDescription
 );
 
 
 
-await axios.post(
-WEBHOOK,
-{
 
+let embed={
 
-username:
-"Kibato News",
-
-
-
-embeds:[{
 
 title:
-"🌸 "+title,
+
+"🌸 "+title.substring(0,256),
 
 
 url:item.link,
 
 
 description:
-description.substring(0,3500),
+
+description.substring(0,4096),
 
 
 color:16733695,
 
 
-image:image
-?
-{
-url:image
-}
-:
-undefined,
-
 
 footer:{
+
 text:
+
 "Kibato News"
+
 },
 
 
 timestamp:
+
 new Date()
 
 
-}],
+};
+
+
+
+
+
+if(image){
+
+embed.image={
+
+url:image
+
+};
+
+}
+
+
+
+
+
+await axios.post(
+
+WEBHOOK,
+
+{
+
+
+username:
+
+"Kibato News",
+
+
+
+embeds:[embed],
 
 
 
 components:[{
 
+
 type:1,
+
 
 components:[{
 
@@ -267,13 +437,19 @@ url:item.link
 
 }]
 
+
 }]
 
 
-});
+}
+
+);
 
 
 }
+
+
+
 
 
 
@@ -291,49 +467,69 @@ const feed of feeds
 ){
 
 
+try{
+
+
 const rss =
+
 await parser.parseURL(feed);
 
 
 
+
 for(
-const item of rss.items.slice(0,10)
+
+const item of rss.items.slice(0,15)
+
 ){
 
 
 
-if(
-!item.link
-)
+if(!item.link)
+
 continue;
 
 
 
 if(
+
 sent.includes(item.link)
+
 )
+
 continue;
 
 
 
 if(
+
 isBad(item.title)
+
 )
+
 continue;
+
+
 
 
 
 const image =
-await getImage(
-item.link
-);
+
+await getImage(item);
+
+
 
 
 
 await sendDiscord(
+
 item,
+
 image
+
 );
+
+
 
 
 
@@ -347,13 +543,33 @@ count++;
 
 
 
+
 await new Promise(
+
 r=>setTimeout(r,2000)
+
 );
 
 
 
 }
+
+
+
+}catch(e){
+
+
+console.log(
+
+"RSS ошибка:",
+
+e.message
+
+);
+
+
+}
+
 
 
 }
@@ -362,23 +578,34 @@ r=>setTimeout(r,2000)
 
 
 fs.writeFileSync(
+
 "sent.json",
+
 JSON.stringify(
+
 sent.slice(-300),
+
 null,
+
 2
+
 )
+
 );
 
 
 
 console.log(
+
 "Отправлено:",
+
 count
+
 );
 
 
 }
+
 
 
 
