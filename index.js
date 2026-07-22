@@ -7,26 +7,14 @@ import fs from "fs";
 const WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 
-const parser = new Parser({
-
-customFields:{
-item:[
-["media:content","media"],
-["content:encoded","content"]
-]
-}
-
-});
-
+const parser = new Parser();
 
 
 const feeds = [
 
-"https://www.animenewsnetwork.com/all/rss.xml",
 "https://animecorner.me/feed/"
 
 ];
-
 
 
 let sent=[];
@@ -51,9 +39,7 @@ sent=[];
 
 
 
-
-function blocked(title){
-
+function isBad(title){
 
 const bad=[
 
@@ -68,68 +54,34 @@ const bad=[
 "podcast",
 "manga",
 "novel",
-"live-action",
-"movie review",
-"marine day",
-"event"
+"live action",
+"event",
+"concert"
 
 ];
 
 
-return bad.some(x=>
-title.toLowerCase().includes(x)
+return bad.some(
+x =>
+title
+.toLowerCase()
+.includes(x)
 );
 
-
 }
 
 
 
 
-function translate(text){
-
-if(!text)
-return "";
-
-
-return text
-
-.replace(/trailer/gi,"трейлер")
-
-.replace(/anime film/gi,"аниме-фильм")
-
-.replace(/anime/gi,"аниме")
-
-.replace(/season/gi,"сезон")
-
-.replace(/new/gi,"новый")
-
-.replace(/announced/gi,"анонсирован")
-
-.replace(/reveals/gi,"представляет")
-
-.replace(/cast/gi,"актёрский состав")
-
-.replace(/staff/gi,"создатели")
-
-.replace(/theme song/gi,"тематическая песня")
-
-.replace(/release/gi,"выход")
-
-.replace(/October/gi,"октября")
-
-.replace(/November/gi,"ноября");
-
-}
-
-
-
-
-
-async function translateFull(text){
-
+async function translate(text){
 
 try{
+
+const clean =
+text
+.replace(/<[^>]*>/g,"")
+.substring(0,2000);
+
 
 
 const r =
@@ -140,67 +92,62 @@ await axios.get(
 params:{
 
 client:"gtx",
-
 sl:"en",
-
 tl:"ru",
-
 dt:"t",
-
-q:text.substring(0,900)
+q:clean
 
 }
 
 });
 
 
+
 return r.data[0]
-.map(x=>x[0])
+.map(
+x=>x[0]
+)
 .join("");
+
 
 
 }catch{
 
-return translate(text);
+return text;
+
+}
 
 }
 
 
-}
 
 
 
+async function getImage(url){
 
-async function getImage(url,item){
 
 try{
-
-
-if(item.media?.$.url)
-return item.media.$.url;
-
-
-
-if(item.enclosure?.url)
-return item.enclosure.url;
-
 
 
 const page =
 await axios.get(
 url,
 {
-headers:{
-"User-Agent":"Mozilla/5.0"
-},
-timeout:10000
-}
-);
 
+headers:{
+"User-Agent":
+"Mozilla/5.0"
+},
+
+timeout:10000
+
+});
 
 
 const $ =
-cheerio.load(page.data);
+cheerio.load(
+page.data
+);
 
 
 
@@ -222,43 +169,39 @@ null
 
 
 
-}catch(e){
-
-console.log(
-"Картинка не найдена:",
-url
-);
+}catch{
 
 return null;
 
 }
 
-
 }
 
 
 
-async function send(item,image){
+
+async function sendDiscord(
+item,
+image
+){
 
 
 const title =
-await translateFull(item.title);
+await translate(
+item.title
+);
+
 
 
 const description =
-await translateFull(
+await translate(
 item.contentSnippet ||
 item.content ||
 "Новая аниме-новость"
 );
 
 
-const cleanDescription =
-description
-.replace(/<[^>]*>/g,"")
-.replace(/&nbsp;/g," ")
-.replace(/&amp;/g,"&")
-.trim();
+
 await axios.post(
 WEBHOOK,
 {
@@ -268,8 +211,8 @@ username:
 "Kibato News",
 
 
-embeds:[{
 
+embeds:[{
 
 title:
 "🌸 "+title,
@@ -279,13 +222,14 @@ url:item.link,
 
 
 description:
-cleanDescription.substring(0,3500),
+description.substring(0,3500),
 
 
 color:16733695,
 
 
-image:image?
+image:image
+?
 {
 url:image
 }
@@ -294,7 +238,8 @@ undefined,
 
 
 footer:{
-text:"Kibato News"
+text:
+"Kibato News"
 },
 
 
@@ -303,6 +248,7 @@ new Date()
 
 
 }],
+
 
 
 components:[{
@@ -336,17 +282,13 @@ async function main(){
 
 
 
-let added=0;
+let count=0;
 
 
 
 for(
 const feed of feeds
 ){
-
-
-
-try{
 
 
 const rss =
@@ -375,7 +317,7 @@ continue;
 
 
 if(
-blocked(item.title)
+isBad(item.title)
 )
 continue;
 
@@ -383,13 +325,12 @@ continue;
 
 const image =
 await getImage(
-item.link,
-item
+item.link
 );
 
 
 
-await send(
+await sendDiscord(
 item,
 image
 );
@@ -401,24 +342,16 @@ item.link
 );
 
 
-added++;
+
+count++;
+
 
 
 await new Promise(
-r=>setTimeout(r,1500)
+r=>setTimeout(r,2000)
 );
 
 
-}
-
-
-
-}catch(e){
-
-console.log(
-"RSS ошибка",
-e.message
-);
 
 }
 
@@ -440,8 +373,8 @@ null,
 
 
 console.log(
-"Новых новостей:",
-added
+"Отправлено:",
+count
 );
 
 
