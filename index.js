@@ -154,46 +154,35 @@ return text;
 
 function cleanText(text){
 
-
 if(!text)
 return "";
 
 
-
 return text
 
-
 .replace(/<script[\s\S]*?<\/script>/gi,"")
-
 .replace(/<style[\s\S]*?<\/style>/gi,"")
-
 .replace(/<[^>]*>/g,"")
+
+.replace(/ТАКЖЕ ПРОЧИТАЙТЕ[\s\S]*/gi,"")
+.replace(/Источник:[\s\S]*/gi,"")
+.replace(/©[\s\S]*/gi,"")
+.replace(/Автор:[\s\S]*/gi,"")
 
 .replace(/facebooktwitterpinterestlinkedintumblrredditwhatsapp/gi,"")
 
 .replace(/Предыдущая запись.*$/gi,"")
-
 .replace(/Следующая запись.*$/gi,"")
 
-.replace(/Загрузка.*$/gi,"")
-
-.replace(/Новости аниме/gi,"")
-
 .replace(/&nbsp;/g," ")
-
 .replace(/&amp;/g,"&")
-
 .replace(/&quot;/g,'"')
-
 .replace(/&#39;/g,"'")
 
 .replace(/\s+/g," ")
-
 .trim();
 
-
 }
-
 
 
 
@@ -206,63 +195,39 @@ return text
 
 async function getArticleData(url,item){
 
-
 let image=null;
-
 let description="";
-
 
 
 try{
 
 
 if(item.media?.$?.url){
-
 image=item.media.$.url;
-
 }
-
-
-
-
-if(item.contentEncoded){
-
-description =
-cleanText(item.contentEncoded)
-.substring(0,1200);
-
-}
-
 
 
 
 const page =
 await axios.get(
-
 url,
-
 {
-
 headers:{
-
 "User-Agent":
 "Mozilla/5.0"
-
 },
-
 timeout:8000
-
-});
-
-
-
-const $ =
-cheerio.load(
-page.data
+}
 );
 
 
 
+const $ =
+cheerio.load(page.data);
+
+
+
+// картинка
 
 if(!image){
 
@@ -271,7 +236,6 @@ $('meta[property="og:image"]')
 .attr("content");
 
 }
-
 
 
 if(!image){
@@ -284,31 +248,43 @@ $('meta[name="twitter:image"]')
 
 
 
+// берём только текст статьи
 
-if(!image){
+let paragraphs=[];
 
-image =
-$("article img")
-.first()
-.attr("src");
+
+$("article p").each((i,el)=>{
+
+let text=$(el).text().trim();
+
+
+if(
+text.length > 40 &&
+paragraphs.length < 6
+){
+
+paragraphs.push(text);
 
 }
 
 
+});
 
 
-// Берём только абзацы статьи
+
+description =
+paragraphs.join(" ");
+
+
+
+// если не нашли
 
 if(!description){
 
 description =
-
-$("article p")
-.map((i,el)=>
-$(el).text()
-)
-.get()
-.join(" ");
+cleanText(
+item.contentEncoded || ""
+);
 
 }
 
@@ -325,12 +301,12 @@ e.message
 
 
 
-
 return{
 
 image,
 
-description
+description:
+description.substring(0,1800)
 
 };
 
@@ -485,7 +461,7 @@ description =
 
 description =
 await translate(
-description.substring(0,3900)
+description.substring(0,1800)
 );
 
 
