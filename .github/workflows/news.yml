@@ -11,6 +11,7 @@ on:
 permissions:
   contents: write
 
+
 jobs:
 
   news:
@@ -36,6 +37,7 @@ jobs:
         DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 
 
+
     - name: Save database
 
       run: |
@@ -46,6 +48,6 @@ jobs:
 
         git add sent.json
 
-        git commit -m "Update news database" || true
+        git commit -m "Update sent database" || true
 
         git push
