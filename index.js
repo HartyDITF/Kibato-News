@@ -7,6 +7,7 @@ import fs from "fs";
 const WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 
+
 const parser = new Parser({
 
 customFields:{
@@ -20,19 +21,25 @@ item:[
 });
 
 
+
 const feeds=[
+
 "https://animecorner.me/feed/"
+
 ];
 
 
+
 let sent=[];
+
 
 
 if(fs.existsSync("sent.json")){
 
 try{
 
-sent=JSON.parse(
+sent =
+JSON.parse(
 fs.readFileSync("sent.json","utf8")
 );
 
@@ -47,9 +54,10 @@ sent=[];
 
 
 
-// мусорные новости
+
 
 function badNews(title){
+
 
 const bad=[
 
@@ -65,7 +73,6 @@ const bad=[
 "concert",
 "event",
 "marine day",
-"facebook",
 "manga",
 "novel",
 "live action",
@@ -90,10 +97,13 @@ title
 
 
 
+
 async function translate(text){
+
 
 if(!text)
 return "";
+
 
 
 try{
@@ -112,11 +122,14 @@ client:"gtx",
 sl:"en",
 tl:"ru",
 dt:"t",
-q:text.substring(0,3500)
+q:text.substring(0,2000)
 
 }
 
-});
+}
+
+);
+
 
 
 return r.data[0]
@@ -138,7 +151,16 @@ return text;
 
 
 
-function clean(text){
+
+
+
+
+function cleanText(text){
+
+
+if(!text)
+return "";
+
 
 
 return text
@@ -149,19 +171,89 @@ return text
 
 .replace(/<[^>]*>/g,"")
 
-.replace(/facebooktwitterpinterestlinkedintumblrredditwhatsapp/gi,"")
+.replace(/facebook|twitter|pinterest|reddit|whatsapp/gi,"")
 
-.replace(/Источник:.*$/gi,"")
+.replace(/Источник:.*/gi,"")
 
-.replace(/Предыдущая запись.*$/gi,"")
+.replace(/Source:.*/gi,"")
 
-.replace(/Следующая запись.*$/gi,"")
+.replace(/Автор:.*/gi,"")
+
+.replace(/Written by.*/gi,"")
+
+.replace(/Also Read.*/gi,"")
+
+.replace(/Также прочитайте.*/gi,"")
+
+.replace(/Предыдущая запись.*/gi,"")
+
+.replace(/Следующая запись.*/gi,"")
+
+.replace(/Комментарии.*/gi,"")
+
+.replace(/Загрузка.*/gi,"")
+
+.replace(/&nbsp;/g," ")
+
+.replace(/&amp;/g,"&")
 
 .replace(/\s+/g," ")
 
 .trim();
 
 }
+
+
+
+
+
+
+
+
+
+function makeDescription(text){
+
+
+let result =
+cleanText(text);
+
+
+
+if(!result)
+return "";
+
+
+
+// берём только первые предложения
+
+let parts =
+result
+.split(". ")
+.filter(x=>x.length>30);
+
+
+
+result =
+parts
+.slice(0,5)
+.join(". ");
+
+
+
+if(result.length>900){
+
+result =
+result.substring(0,900)
++"...";
+
+}
+
+
+
+return result;
+
+}
+
 
 
 
@@ -179,25 +271,35 @@ let description="";
 
 
 
-// картинка из RSS
 
-if(item.media?.$?.url)
+// картинка RSS
+
+
+if(item.media?.$.url){
+
 image=item.media.$.url;
 
+}
 
-if(item.thumbnail?.$?.url)
+
+
+if(item.thumbnail?.$.url){
+
 image=item.thumbnail.$.url;
 
+}
 
 
-// описание из RSS
-
-if(item.contentEncoded)
-description=item.contentEncoded;
 
 
-if(!description)
-description=item.contentSnippet;
+// сначала берём короткое RSS описание
+
+
+description =
+item.contentSnippet ||
+"";
+
+
 
 
 
@@ -212,25 +314,31 @@ item.link,
 {
 
 headers:{
+
 "User-Agent":
 "Mozilla/5.0"
+
 },
 
 timeout:8000
 
-});
+}
+
+);
 
 
-const $=
+
+const $ =
 cheerio.load(page.data);
 
 
 
-// запасные картинки
+
 
 if(!image){
 
-image=
+
+image =
 $('meta[property="og:image"]')
 .attr("content");
 
@@ -240,7 +348,8 @@ $('meta[property="og:image"]')
 
 if(!image){
 
-image=
+
+image =
 $('meta[name="twitter:image"]')
 .attr("content");
 
@@ -248,21 +357,34 @@ $('meta[name="twitter:image"]')
 
 
 
-// нормальное описание
 
-if(
-!description ||
-description.length<200
-){
+if(!image){
 
-description=
+
+image =
+$("article img")
+.first()
+.attr("src");
+
+}
+
+
+
+
+
+// если RSS плохой
+
+if(description.length<150){
+
+
+description =
 
 $("article p")
+.slice(0,5)
 .map((i,e)=>
 $(e).text()
 )
 .get()
-.slice(0,5)
 .join(" ");
 
 }
@@ -271,12 +393,15 @@ $(e).text()
 
 }catch(e){
 
+
 console.log(
-"Страница:",
+"Страница ошибка:",
 e.message
 );
 
+
 }
+
 
 
 
@@ -284,7 +409,8 @@ return{
 
 image,
 
-description:clean(description)
+description:
+makeDescription(description)
 
 };
 
@@ -299,33 +425,35 @@ description:clean(description)
 
 
 
-async function send(item,data){
+async function sendDiscord(item,data){
 
 
-let title=
-await translate(item.title);
-
-
-
-let description=data.description;
+const title =
+await translate(
+item.title
+);
 
 
 
-if(
-!description ||
-description.length<100
-){
+let description =
+data.description;
 
-description=
+
+
+if(!description){
+
+description =
 "Краткое описание отсутствует";
 
 }
 
 
-description=
+
+description =
 await translate(
-description.substring(0,1800)
+description.substring(0,900)
 );
+
 
 
 
@@ -336,8 +464,10 @@ WEBHOOK,
 
 {
 
+
 username:
 "Kibato News",
+
 
 
 embeds:[{
@@ -356,30 +486,44 @@ description,
 color:16733695,
 
 
-image:data.image?
+
+...(data.image?
+
 {
+
+image:{
+
 url:data.image
+
 }
-:
-undefined,
+
+}
+
+:{}
+
+),
+
 
 
 footer:{
+
 text:
 "Kibato News"
+
 },
 
 
+
 timestamp:
+
 new Date()
 
 
 }]
 
-}
 
-);
 
+});
 
 
 }
@@ -398,16 +542,46 @@ async function main(){
 let count=0;
 
 
-const rss=
-await parser.parseURL(
-feeds[0]
+
+for(const feed of feeds){
+
+
+
+let rss;
+
+
+try{
+
+
+rss =
+await parser.parseURL(feed);
+
+
+
+}catch(e){
+
+
+console.log(
+"RSS ошибка:",
+e.message
 );
+
+
+continue;
+
+}
+
+
 
 
 
 for(
-const item of rss.items.slice(0,15)
+const item of rss.items.slice(0,20)
+
 ){
+
+
+try{
 
 
 
@@ -426,12 +600,13 @@ continue;
 
 
 
-const data=
+
+const data =
 await getData(item);
 
 
 
-await send(
+await sendDiscord(
 item,
 data
 );
@@ -461,6 +636,22 @@ r=>setTimeout(r,3000)
 
 
 
+}catch(e){
+
+
+console.log(
+"Ошибка новости:",
+e.message
+);
+
+
+}
+
+
+}
+
+
+
 }
 
 
@@ -471,7 +662,7 @@ fs.writeFileSync(
 "sent.json",
 
 JSON.stringify(
-sent.slice(-300),
+sent.slice(-500),
 null,
 2
 )
@@ -481,7 +672,7 @@ null,
 
 
 console.log(
-"Всего:",
+"Всего отправлено:",
 count
 );
 
@@ -491,11 +682,13 @@ count
 
 
 
+
+
 main()
 .catch(e=>
 
 console.log(
-"Ошибка:",
+"Критическая ошибка:",
 e.message
 )
 
