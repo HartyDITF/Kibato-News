@@ -4,22 +4,29 @@ import * as cheerio from "cheerio";
 import fs from "fs";
 
 
-const WEBHOOK =
-process.env.DISCORD_WEBHOOK;
+const WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 
-const parser = new Parser();
+const parser = new Parser({
+
+customFields:{
+item:[
+["media:content","media"],
+["content:encoded","content"]
+]
+}
+
+});
+
 
 
 const feeds = [
 
 "https://www.animenewsnetwork.com/all/rss.xml",
-
-"https://www.crunchyroll.com/newsrss",
-
 "https://animecorner.me/feed/"
 
 ];
+
 
 
 let sent=[];
@@ -27,44 +34,52 @@ let sent=[];
 
 if(fs.existsSync("sent.json")){
 
-sent =
-JSON.parse(
-fs.readFileSync("sent.json")
-);
-
-}
-
-
-
-async function getImage(url){
-
 try{
 
-const html =
-await axios.get(url,{
-headers:{
-"User-Agent":"Mozilla/5.0"
-}
-});
-
-
-const $ =
-cheerio.load(html.data);
-
-
-return (
-$('meta[property="og:image"]')
-.attr("content")
-||
-null
+sent =
+JSON.parse(
+fs.readFileSync("sent.json","utf8")
 );
-
 
 }catch{
 
-return null;
+sent=[];
 
 }
+
+}
+
+
+
+
+function blocked(title){
+
+
+const bad=[
+
+"game",
+"controller",
+"figure",
+"merch",
+"interview",
+"review",
+"column",
+"opinion",
+"podcast",
+"manga",
+"novel",
+"live-action",
+"movie review",
+"marine day",
+"event"
+
+];
+
+
+return bad.some(x=>
+title.toLowerCase().includes(x)
+);
+
 
 }
 
@@ -73,29 +88,156 @@ return null;
 
 function translate(text){
 
+if(!text)
+return "";
+
+
 return text
 
 .replace(/trailer/gi,"трейлер")
 
-.replace(/new season/gi,"новый сезон")
-
 .replace(/anime film/gi,"аниме-фильм")
+
+.replace(/anime/gi,"аниме")
+
+.replace(/season/gi,"сезон")
+
+.replace(/new/gi,"новый")
 
 .replace(/announced/gi,"анонсирован")
 
-.replace(/release date/gi,"дата выхода")
-
 .replace(/reveals/gi,"представляет")
 
-.replace(/cast/gi,"актерский состав")
+.replace(/cast/gi,"актёрский состав")
 
-.replace(/staff/gi,"создатели");
+.replace(/staff/gi,"создатели")
+
+.replace(/theme song/gi,"тематическая песня")
+
+.replace(/release/gi,"выход")
+
+.replace(/October/gi,"октября")
+
+.replace(/November/gi,"ноября");
 
 }
 
 
 
-async function sendNews(item,image){
+
+
+async function translateFull(text){
+
+
+try{
+
+
+const r =
+await axios.get(
+"https://translate.googleapis.com/translate_a/single",
+{
+
+params:{
+
+client:"gtx",
+
+sl:"en",
+
+tl:"ru",
+
+dt:"t",
+
+q:text.substring(0,900)
+
+}
+
+});
+
+
+return r.data[0]
+.map(x=>x[0])
+.join("");
+
+
+}catch{
+
+return translate(text);
+
+}
+
+
+}
+
+
+
+
+async function getImage(url,item){
+
+
+try{
+
+
+if(item.media?.$.url)
+return item.media.$.url;
+
+
+
+const page =
+await axios.get(
+url,
+{
+headers:{
+"User-Agent":"Mozilla/5.0"
+}
+}
+);
+
+
+
+const $ =
+cheerio.load(page.data);
+
+
+
+return (
+
+$('meta[property="og:image"]')
+.attr("content")
+
+||
+
+null
+
+);
+
+
+
+}catch{
+
+return null;
+
+}
+
+
+}
+
+
+
+
+async function send(item,image){
+
+
+const title =
+await translateFull(item.title);
+
+
+const description =
+await translateFull(
+item.contentSnippet ||
+item.content ||
+"Новая аниме-новость"
+);
+
 
 
 await axios.post(
@@ -109,29 +251,22 @@ username:
 
 embeds:[{
 
+
 title:
-"🌸 "+translate(item.title),
+"🌸 "+title,
 
 
-url:
-item.link,
+url:item.link,
 
 
 description:
-translate(
-item.contentSnippet ||
-"Новая аниме-новость"
-)
-.substring(0,900),
+description.substring(0,900),
 
 
-color:
-16733695,
+color:16733695,
 
 
-image:
-image
-?
+image:image?
 {
 url:image
 }
@@ -140,8 +275,7 @@ undefined,
 
 
 footer:{
-text:
-"Kibato News"
+text:"Kibato News"
 },
 
 
@@ -182,9 +316,15 @@ url:item.link
 async function main(){
 
 
+
+let added=0;
+
+
+
 for(
 const feed of feeds
 ){
+
 
 
 try{
@@ -196,8 +336,15 @@ await parser.parseURL(feed);
 
 
 for(
-const item of rss.items.slice(0,5)
+const item of rss.items.slice(0,10)
 ){
+
+
+
+if(
+!item.link
+)
+continue;
 
 
 
@@ -208,27 +355,39 @@ continue;
 
 
 
+if(
+blocked(item.title)
+)
+continue;
+
+
+
 const image =
-await getImage(item.link);
+await getImage(
+item.link,
+item
+);
 
 
 
-await sendNews(
+await send(
 item,
 image
 );
 
 
 
-sent.push(item.link);
-
-
-
-console.log(
-"Отправлено:",
-item.title
+sent.push(
+item.link
 );
 
+
+added++;
+
+
+await new Promise(
+r=>setTimeout(r,1500)
+);
 
 
 }
@@ -238,8 +397,7 @@ item.title
 }catch(e){
 
 console.log(
-"Ошибка RSS",
-feed,
+"RSS ошибка",
 e.message
 );
 
@@ -250,17 +408,26 @@ e.message
 
 
 
+
 fs.writeFileSync(
 "sent.json",
 JSON.stringify(
-sent.slice(-200),
+sent.slice(-300),
 null,
 2
 )
 );
 
 
+
+console.log(
+"Новых новостей:",
+added
+);
+
+
 }
+
 
 
 main();
