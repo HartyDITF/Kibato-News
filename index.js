@@ -438,24 +438,21 @@ $("article img")
 
 // Если RSS описание плохое
 
-if(
-!description ||
-description.length<200
-){
+if(needArticleText(description)){
 
+    const articleText =
+    $("article p")
+    .map((i,e)=>$(e).text().trim())
+    .get()
+    .filter(t => t.length > 40)
+    .slice(0,6)
+    .join(" ");
 
-description =
+    if(articleText.length > description.length){
 
-$("article p")
-.map((i,e)=>
+        description = articleText;
 
-$(e).text()
-
-)
-.get()
-.slice(0,6)
-.join(" ");
-
+    }
 
 }
 
@@ -508,7 +505,26 @@ video
 
 
 
+function needArticleText(description){
 
+    if(!description) return true;
+
+    description = cleanText(description);
+
+    // слишком короткое описание
+    if(description.length < 1000)
+        return true;
+
+    // обрезано на середине предложения
+    if(!/[.!?]$/.test(description))
+        return true;
+
+    // обрезано многоточием
+    if(description.endsWith("..."))
+        return true;
+
+    return false;
+}
 
 
 
