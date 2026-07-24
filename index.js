@@ -390,7 +390,38 @@ html = page.data;
 
 const $ = cheerio.load(page.data);
 
+// ===== Поиск встроенного YouTube =====
 
+const iframe =
+$('iframe[src*="youtube.com/embed"], iframe[src*="youtube-nocookie.com/embed"]')
+.first()
+.attr("src");
+
+if (iframe) {
+
+    const match = iframe.match(/embed\/([^?&]+)/);
+
+    if (match) {
+        video = `https://youtu.be/${match[1]}`;
+    }
+
+}
+
+// Если iframe нет — ищем обычную ссылку YouTube
+
+if (!video) {
+
+    const html = page.data;
+
+    const yt = html.match(
+        /https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/
+    );
+
+    if (yt) {
+        video = `https://youtu.be/${yt[1]}`;
+    }
+
+}
 
 
 
@@ -628,145 +659,72 @@ return null;
 
 async function sendDiscord(item,data){
 
+    const title = await translate(item.title);
 
+    let description = data.description;
 
-const title =
-await translate(
-item.title
-);
+    if(!description){
+        description = "Описание отсутствует";
+    }
 
+    description = await translate(description);
 
+    const buttons = [
+        {
+            type:2,
+            style:5,
+            label:"📖 Читать",
+            url:item.link
+        }
+    ];
 
-let description =
-data.description;
+    if(data.video){
+        buttons.push({
+            type:2,
+            style:5,
+            label:"🎬 Смотреть трейлер",
+            url:data.video
+        });
+    }
 
+    await axios.post(WEBHOOK,{
 
+        username:"Kibato News",
 
-if(!description){
+        embeds:[
+            {
+                title:"🌸 " + title,
 
-description =
-"Описание отсутствует";
+                url:item.link,
 
-}
+                description:description.substring(0,1800),
 
+                color:16733695,
 
+                ...(data.image ? {
+                    image:{
+                        url:data.image
+                    }
+                } : {}),
 
+                footer:{
+                    text:"Kibato News"
+                },
 
-description =
-await translate(
-description
-);
+                timestamp:new Date()
+            }
+        ],
 
+        components:[
+            {
+                type:1,
+                components:buttons
+            }
+        ]
 
-
-
-
-
-await axios.post(
-
-WEBHOOK,
-
-{
-
-
-username:
-
-"Kibato News",
-
-
-
-embeds:[{
-
-
-title:
-
-"🌸 "+title,
-
-
-
-url:
-
-item.link,
-
-
-
-description:
-
-
-description.substring(0,1800),
-
-
-
-color:
-
-16733695,
-
-
-
-...(data.image ?
-
-{
-
-image:{
-
-url:data.image
+    });
 
 }
-
-}
-
-:{}
-
-),
-
-
-
-
-footer:{
-text:
-"Kibato News"
-},
-
-
-...(data.video ?
-
-{
-
-fields:[
-
-{
-
-name:"🎬 Трейлер",
-
-value:
-`[Смотреть видео](${data.video})`
-
-}
-
-]
-
-}
-
-:{}
-
-),
-
-
-
-timestamp:
-
-new Date()
-
-
-}]
-
-
-
-});
-
-
-}
-
 
 
 
