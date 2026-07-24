@@ -380,8 +380,7 @@ await axios.get(
 item.link,
 {
 headers:{
-"User-Agent":
-"Mozilla/5.0"
+"User-Agent":"Mozilla/5.0"
 },
 timeout:8000
 }
@@ -389,27 +388,7 @@ timeout:8000
 
 html = page.data;
 
-item.link,
-
-{
-
-headers:{
-
-"User-Agent":
-"Mozilla/5.0"
-
-},
-
-timeout:8000
-
-}
-
-);
-
-
-
-const $ =
-cheerio.load(page.data);
+const $ = cheerio.load(page.data);
 
 
 
