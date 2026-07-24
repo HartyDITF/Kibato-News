@@ -316,13 +316,13 @@ x.trim().length>40
 
 let result =
 sentences
-.slice(0,8)
+.slice(0,5)
 .join(". ")
 .trim();
 
 
 
-if(result.length>1600){
+if(result.length>1200){
 
 result =
 result.substring(0,1200)
