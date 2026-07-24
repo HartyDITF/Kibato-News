@@ -5,8 +5,11 @@ import fs from "fs";
 
 
 const WEBHOOK = process.env.DISCORD_WEBHOOK;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
-
+if(!YOUTUBE_API_KEY){
+console.log("YouTube API ключ отсутствует");
+}
 
 const parser = new Parser({
 
@@ -651,7 +654,70 @@ return null;
 
 
 
+async function getTrailer(title){
 
+try{
+
+const r = await axios.get(
+
+"https://www.googleapis.com/youtube/v3/search",
+
+{
+
+params:{
+
+key:YOUTUBE_API_KEY,
+
+q:title.replace(/anime|season|reveals|announced|trailer/gi,"") 
++ " anime official PV",
+
+part:"snippet",
+
+maxResults:3,
+
+type:"video"
+
+}
+
+}
+
+);
+
+
+if(
+r.data.items &&
+r.data.items.length
+){
+
+const video =
+r.data.items.find(v =>
+v.snippet.title.toLowerCase().includes("pv") ||
+v.snippet.title.toLowerCase().includes("trailer")
+);
+
+if(video){
+
+return "https://youtu.be/" +
+video.id.videoId;
+
+}
+
+}
+
+
+}catch(e){
+
+console.log(
+"YouTube ошибка:",
+e.response?.data || e.message
+);
+
+}
+
+
+return null;
+
+}
 
 
 
@@ -843,7 +909,14 @@ let data =
 await getData(item);
 
 
+// Если трейлер не найден в статье — ищем через YouTube API
 
+if(!data.video){
+
+data.video =
+await getTrailer(item.title);
+
+}
 
 
 
