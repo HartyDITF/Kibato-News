@@ -316,13 +316,13 @@ x.trim().length>40
 
 let result =
 sentences
-.slice(0,5)
+.slice(0,8)
 .join(". ")
 .trim();
 
 
 
-if(result.length>1200){
+if(result.length>1600){
 
 result =
 result.substring(0,1200)
@@ -658,6 +658,15 @@ async function getTrailer(title){
 
 try{
 
+const cleanTitle = title
+.replace(/anime/gi,"")
+.replace(/season/gi,"")
+.replace(/reveals/gi,"")
+.replace(/announced/gi,"")
+.replace(/trailer/gi,"")
+.trim();
+
+
 const r = await axios.get(
 
 "https://www.googleapis.com/youtube/v3/search",
@@ -668,20 +677,22 @@ params:{
 
 key:YOUTUBE_API_KEY,
 
-q:title.replace(/anime|season|reveals|announced|trailer/gi,"") 
-+ " anime official PV",
+q: cleanTitle + " anime PV",
 
 part:"snippet",
 
-maxResults:3,
+maxResults:5,
 
-type:"video"
+type:"video",
+
+videoDuration:"short"
 
 }
 
 }
 
 );
+
 
 
 if(
@@ -689,18 +700,39 @@ r.data.items &&
 r.data.items.length
 ){
 
+
 const video =
-r.data.items.find(v =>
-v.snippet.title.toLowerCase().includes("pv") ||
-v.snippet.title.toLowerCase().includes("trailer")
+r.data.items.find(v=>{
+
+const t =
+v.snippet.title.toLowerCase();
+
+
+return (
+
+t.includes("pv") ||
+t.includes("trailer") ||
+t.includes("official")
+
 );
 
+});
+
+
+
 if(video){
+
+console.log(
+"Найден трейлер:",
+video.snippet.title
+);
+
 
 return "https://youtu.be/" +
 video.id.videoId;
 
 }
+
 
 }
 
@@ -718,7 +750,6 @@ e.response?.data || e.message
 return null;
 
 }
-
 
 
 
@@ -916,8 +947,12 @@ if(!data.video){
 data.video =
 await getTrailer(item.title);
 
-}
+console.log(
+"Видео:",
+data.video || "не найдено"
+);
 
+}
 
 
 
