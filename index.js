@@ -170,58 +170,41 @@ text.includes(word)
 
 async function translate(text){
 
+    if(!text) return "";
 
-if(!text)
-return "";
+    try{
 
+        const clean = text
+            .replace(/\s+/g," ")
+            .trim()
+            .substring(0,2500);
 
+        const r = await axios.get(
+            "https://translate.googleapis.com/translate_a/single",
+            {
+                params:{
+                    client:"gtx",
+                    sl:"en",
+                    tl:"ru",
+                    dt:"t",
+                    q:clean
+                },
+                timeout:10000
+            }
+        );
 
-try{
+        return r.data[0]
+            .map(x => x[0])
+            .join("");
 
+    }catch(e){
 
-const clean =
-text
-.replace(/\s+/g," ")
-.trim()
-.substring(0,3000);
+        console.log("Ошибка перевода:");
+        console.log(e.response?.status);
+        console.log(e.response?.data || e.message);
 
-
-
-const r = await axios.get(
-
-"https://translate.googleapis.com/translate_a/single",
-
-{
-
-params:{
-
-client:"gtx",
-sl:"en",
-tl:"ru",
-dt:"t",
-q:clean
-
-}
-
-}
-
-);
-
-
-
-return r.data[0]
-.map(x=>x[0])
-.join("");
-
-
-
-}catch{
-
-
-return text;
-
-}
-
+        return text;
+    }
 
 }
 
